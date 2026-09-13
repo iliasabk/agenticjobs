@@ -44,9 +44,13 @@ export function renderMarkdown(source: string, options: MarkdownOptions = {}): s
     // Fenced code, taken first so nothing inside a fence is parsed as markup.
     const fence = /^\s{0,3}(`{3,}|~{3,})\s*([A-Za-z0-9_+-]*)\s*$/.exec(line);
     if (fence !== null) {
-      const marker = (fence[1] ?? '```').startsWith('`') ? '`{3,}' : '~{3,}';
+      // The closing fence needs the same character and at least the opening
+      // length, or a shorter fence inside the content would end the block
+      // early — CommonMark's rule, and the reason four backticks exist.
+      const opening = fence[1] ?? '```';
+      const marker = opening.startsWith('`') ? '`' : '~';
       const language = fence[2] ?? '';
-      const closing = new RegExp(`^\\s{0,3}${marker}\\s*$`);
+      const closing = new RegExp(`^\\s{0,3}${marker}{${opening.length},}\\s*$`);
       const body: string[] = [];
       index += 1;
       while (index < lines.length) {
@@ -325,7 +329,11 @@ function unescapeUrl(href: string): string {
 /** Plain text, for meta descriptions, feeds, the TUI and search snippets. */
 export function toPlainText(source: string, limit = 300): string {
   const text = source
-    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(
+      /(`{3,}|~{3,})[^\n]*\n([\s\S]*?)(?:\n\s{0,3}(`{3,}|~{3,})\s*(?=\n|$)|$)/g,
+      (whole, open: string, _body: string, close?: string) =>
+        close !== undefined && close[0] === open[0] && close.length >= open.length ? ' ' : whole,
+    )
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[#>*_~`|]/g, ' ')

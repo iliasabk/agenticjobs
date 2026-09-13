@@ -63,6 +63,26 @@ test('a fence is not parsed as markup', () => {
   assert.ok(!html.includes('<strong>'), html);
 });
 
+test('a shorter fence inside a longer one stays literal code', () => {
+  const html = renderMarkdown('````markdown\n```\n**literal**\n```\n````');
+  assert.ok(html.includes('**literal**'), html);
+  assert.ok(!html.includes('<strong>'), html);
+  // The run of three backticks is content here, not a closer.
+  assert.equal(html.match(/<pre>/g)?.length, 1, html);
+});
+
+test('a longer fence closes a shorter one, as CommonMark allows', () => {
+  const html = renderMarkdown('```\ncode\n`````\nafter');
+  assert.ok(html.includes('code'), html);
+  assert.ok(html.includes('<p>after</p>'), html);
+});
+
+test('a tilde fence does not close a backtick fence', () => {
+  const html = renderMarkdown('```\n~~~\nstill code\n```');
+  assert.ok(html.includes('still code'), html);
+  assert.equal(html.match(/<pre>/g)?.length, 1, html);
+});
+
 test('headings can be shifted so an embedded document has no second h1', () => {
   assert.ok(renderMarkdown('# Title').includes('<h1>Title</h1>'));
   assert.ok(renderMarkdown('# Title', { headingOffset: 1 }).includes('<h2>Title</h2>'));
