@@ -82,13 +82,23 @@ export function isPrivateAddress(address: string): boolean {
   }
   const lower = address.toLowerCase();
   if (lower === '::1' || lower === '::') return true;
-  // fe80::/10 link-local and fec0::/10 site-local, then fc00::/7 unique local.
-  if (/^fe[89a-f][0-9a-f]:/.test(lower)) return true;
-  if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
+  // The first hextet decides the reserved ranges: fe80::/10 is link-local
+  // (fe80 through febf, so a prefix test on "fe80:" misses fe90::1),
+  // fec0::/10 is site-local and fc00::/7 is unique-local.
+  const hextet = Number.parseInt(lower.split(':', 1)[0] ?? '', 16);
+  if ((hextet & 0xffc0) === 0xfe80 || (hextet & 0xffc0) === 0xfec0 || (hextet & 0xfe00) === 0xfc00) return true;
   if (lower.startsWith('2001:db8:')) return true;
-  // An IPv4 address hidden in an IPv6 one.
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
-  return mapped !== null && isPrivateAddress(mapped[1] ?? '');
+  // An IPv4 address hidden in an IPv6 one. A DNS result spells it dotted
+  // (::ffff:127.0.0.1), but a URL parser hands over the hex form
+  // (::ffff:7f00:1) — including when the user typed the dotted spelling —
+  // so checking only the dotted form lets [::ffff:a9fe:a9fe] reach
+  // 169.254.169.254.
+  const mapped = /^::ffff:(?:(\d+\.\d+\.\d+\.\d+)|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/.exec(lower);
+  if (mapped === null) return false;
+  if (mapped[1] !== undefined) return isPrivateAddress(mapped[1]);
+  const high = Number.parseInt(mapped[2] ?? '', 16);
+  const low = Number.parseInt(mapped[3] ?? '', 16);
+  return isPrivateAddress(`${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`);
 }
 
 /** The page as Markdown, by whichever route is configured. */

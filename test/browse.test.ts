@@ -50,11 +50,33 @@ test('private and non-http addresses are refused before any fetch', async () => 
   assert.equal(isPrivateAddress('240.1.2.3'), true);
   assert.equal(isPrivateAddress('fec0::1'), true);
   assert.equal(isPrivateAddress('2001:db8::1'), true);
-  assert.equal(isPrivateAddress('93.184.216.34'), false);
   assert.equal(isPrivateAddress('100.128.0.1'), false);
   assert.equal(isPrivateAddress('223.255.255.1'), false);
+  // The URL parser spells a mapped address hex, so the dotted-only check
+  // before let [::ffff:7f00:1] and [::ffff:a9fe:a9fe] (169.254.169.254)
+  // through to the fetch.
+  assert.equal(isPrivateAddress('::ffff:7f00:1'), true);
+  assert.equal(isPrivateAddress('::ffff:a9fe:a9fe'), true);
+  assert.equal(isPrivateAddress('::ffff:a00:1'), true);
+  // A mapped address that is public stays public.
+  assert.equal(isPrivateAddress('::ffff:808:808'), false);
+  // Link-local is fe80::/10, not just the fe80: hextet.
+  assert.equal(isPrivateAddress('fe90::1'), true);
+  assert.equal(isPrivateAddress('febf::1'), true);
+  assert.equal(isPrivateAddress('93.184.216.34'), false);
+  assert.equal(isPrivateAddress('2001:4860:4860::8888'), false);
   await assert.rejects(assertPublicUrl('ftp://example.com/x'), BrowseProblem);
   await assert.rejects(assertPublicUrl('http://127.0.0.1/resume'), /not a public address/);
+  // Both spellings of a mapped literal reach the guard as hex.
+  await assert.rejects(assertPublicUrl('http://[::ffff:7f00:1]/resume'), /not a public address/);
+  await assert.rejects(
+    assertPublicUrl('http://[::ffff:127.0.0.1]/resume'),
+    /not a public address/,
+  );
+  await assert.rejects(
+    assertPublicUrl('http://[::ffff:a9fe:a9fe]/latest/meta-data'),
+    /not a public address/,
+  );
   await assert.rejects(assertPublicUrl('not a url'), /not a URL/);
   let fetched = false;
   await assert.rejects(
