@@ -68,6 +68,9 @@ export function saveConfig(config: Config): void {
 
 export function normaliseServer(input: string): string {
   const trimmed = input.trim().replace(/\/+$/, '');
+  if (trimmed === '') {
+    throw new Error('Board server URL must not be blank.');
+  }
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed.replace(/^https?:/i, (scheme) => scheme.toLowerCase());
   }

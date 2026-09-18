@@ -25,3 +25,9 @@ test('a client with an uppercase scheme requests the supplied board', async () =
   await client.employers();
   assert.equal(requested, 'https://example.test/api/v1/orgs');
 });
+
+test('blank board server URLs are rejected instead of normalizing to https://', () => {
+  for (const blank of ['', '   ', '/', '///', ' \t / ']) {
+    assert.throws(() => normaliseServer(blank), /must not be blank/);
+  }
+});
