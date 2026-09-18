@@ -274,8 +274,15 @@ function decodeXml(value: string): string {
   const named: Record<string, string> = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' };
   // One pass keeps a decoded ampersand from starting another reference.
   return value.replace(/&(#x[0-9a-fA-F]+|#\d+|lt|gt|quot|apos|amp);/g, (whole, entity: string) => {
-    if (entity.startsWith('#x')) return String.fromCodePoint(Number.parseInt(entity.slice(2), 16));
-    if (entity.startsWith('#')) return String.fromCodePoint(Number(entity.slice(1)));
+    if (entity.startsWith('#x')) {
+      const code = Number.parseInt(entity.slice(2), 16);
+      // A reference past the last code point is text, not a throw.
+      return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+    }
+    if (entity.startsWith('#')) {
+      const code = Number(entity.slice(1));
+      return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+    }
     return named[entity] ?? whole;
   });
 }

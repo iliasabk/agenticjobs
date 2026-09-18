@@ -74,11 +74,12 @@ function decode(text: string): string {
       if (named[key] !== undefined) return named[key];
       if (body.startsWith('#x') || body.startsWith('#X')) {
         const code = Number.parseInt(body.slice(2), 16);
-        return Number.isFinite(code) ? String.fromCodePoint(code) : whole;
+        // A reference past the last code point is text, not a throw.
+        return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
       }
       if (body.startsWith('#')) {
         const code = Number.parseInt(body.slice(1), 10);
-        return Number.isFinite(code) ? String.fromCodePoint(code) : whole;
+        return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
       }
       return whole;
     })

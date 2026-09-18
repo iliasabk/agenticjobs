@@ -277,3 +277,16 @@ test('update tells its two jobs apart by whether it was given a URL', async () =
   assert.equal(looksLikeUrl('some-job-slug'), false);
   assert.equal(looksLikeUrl('file:///etc/passwd'), false);
 });
+
+test('a numeric character reference past the last code point stays text', () => {
+  // &#x110000; is one past U+10FFFF and &#99999999; is nowhere near one.
+  // String.fromCodePoint throws on both, and the throw used to kill the whole
+  // import. A page can carry them innocently - they are text, not markup.
+  const html = `<html><head><title>Hiring &#x110000; fast</title></head>
+    <body><main><p>We are hiring engineers to work on &#99999999; search.
+    Apply with a resume and a short note.</p></main></body></html>`;
+  const job = extractJob(html, 'https://example.com/jobs/range');
+  assert.equal(job.via, 'page');
+  assert.ok(job.title.includes('&#x110000;'), job.title);
+  assert.ok(job.description.includes('&#99999999;'), job.description);
+});
