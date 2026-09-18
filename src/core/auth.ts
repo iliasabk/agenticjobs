@@ -149,7 +149,10 @@ export interface MagicLink {
 /** Only same-origin paths. An open redirect on a login link is a phish. */
 export function safeRedirect(value: unknown): string | null {
   const raw = clean(value, 500);
-  if (raw === '' || !raw.startsWith('/') || raw.startsWith('//')) return null;
+  if (raw === '' || !raw.startsWith('/')) return null;
+  // "//host" is a network-path reference, and a browser reads "\" as "/", so
+  // "/\host" is the same open redirect one key over. Both are refused.
+  if (raw.startsWith('//') || raw.includes('\\')) return null;
   return raw;
 }
 
