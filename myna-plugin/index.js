@@ -18,32 +18,9 @@
  */
 
 import { BoardClient, login, normaliseServer } from '@profullstack/agenticjobs/client';
+import { parsePosting } from './posting.js';
 
 const NETWORK_ID = 'jobs';
-
-/** Front matter for the structured fields, Markdown below for the body. */
-function parsePosting(text, title, extra) {
-  const fields = { ...extra };
-  const match = /^---\n([\s\S]*?)\n---\n?/.exec(text.replace(/\r\n?/g, '\n'));
-  let body = text;
-
-  if (match) {
-    body = text.slice(match[0].length);
-    for (const line of match[1].split('\n')) {
-      const pair = /^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.+)$/.exec(line);
-      if (!pair) continue;
-      const key = pair[1].replace(/[_-]([a-z])/g, (_, c) => c.toUpperCase());
-      fields[key] = pair[2].trim().replace(/^["']|["']$/g, '');
-    }
-  }
-
-  const heading = /^#\s+(.+)$/m.exec(body);
-  fields.title = fields.title ?? title ?? heading?.[1]?.trim();
-  // The h1 is dropped when it became the title, so the listing does not show
-  // the same line twice.
-  fields.description = heading && !title ? body.replace(/^#\s+.+\n?/m, '').trim() : body.trim();
-  return fields;
-}
 
 function clientFor(account) {
   return new BoardClient(account.meta.server, {
