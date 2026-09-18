@@ -87,6 +87,59 @@ test('without a browser service the page is fetched and reduced', async () => {
   assert.deepEqual(calls, ['https://ada.example/resume']);
 });
 
+test('a redirect is followed only after its target passes the same public check', async () => {
+  const calls: string[] = [];
+  const fetcher = (async (input: string | URL | Request) => {
+    calls.push(String(input));
+    if (calls.length === 1)
+      return new Response(null, {
+        status: 302,
+        headers: { location: '/moved' },
+      });
+    return new Response(PAGE, { status: 200, headers: { 'content-type': 'text/html' } });
+  }) as typeof fetch;
+  const result = await pageToMarkdown('http://93.184.216.34/resume', {
+    obscuraMcpUrl: null,
+    fetch: fetcher,
+  });
+  assert.equal(result.via, 'fetch');
+  assert.ok(result.markdown.startsWith('# Ada Lovelace'));
+  assert.deepEqual(calls, ['http://93.184.216.34/resume', 'http://93.184.216.34/moved']);
+});
+
+test('a public page may not bounce the fetch to a private address', async () => {
+  const calls: string[] = [];
+  const fetcher = (async (input: string | URL | Request) => {
+    calls.push(String(input));
+    if (calls.length === 1)
+      return new Response(null, {
+        status: 302,
+        headers: { location: 'http://169.254.169.254/latest/meta-data' },
+      });
+    return new Response('secret', { status: 200 });
+  }) as typeof fetch;
+  await assert.rejects(
+    pageToMarkdown('http://93.184.216.34/resume', {
+      obscuraMcpUrl: null,
+      fetch: fetcher,
+    }),
+    /not a public address/,
+  );
+  assert.deepEqual(calls, ['http://93.184.216.34/resume']);
+});
+
+test('a redirect chain is bounded', async () => {
+  const fetcher = (async () =>
+    new Response(null, { status: 302, headers: { location: '/loop' } })) as typeof fetch;
+  await assert.rejects(
+    pageToMarkdown('http://93.184.216.34/resume', {
+      obscuraMcpUrl: null,
+      fetch: fetcher,
+    }),
+    /Too many redirects/,
+  );
+});
+
 test('with a browser service the page goes through navigate then markdown', async () => {
   const seen: Array<{ method: string; name?: string; args?: Record<string, unknown> }> = [];
   const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {

@@ -103,7 +103,13 @@ export async function pageToMarkdown(raw: string, options: BrowseOptions): Promi
       maxChars,
       options.timeoutMs ?? 45_000,
     );
-  return viaFetch(url, options.fetch ?? fetch, maxChars, options.timeoutMs ?? 20_000);
+  return viaFetch(
+    url,
+    options.fetch ?? fetch,
+    maxChars,
+    options.timeoutMs ?? 20_000,
+    options.allowPrivate ?? false,
+  );
 }
 
 // --- Obscura -------------------------------------------------------------
@@ -193,26 +199,42 @@ async function viaObscura(
 
 // --- plain fetch -----------------------------------------------------------
 
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 5;
+
 async function viaFetch(
   url: URL,
   fetcher: typeof fetch,
   maxChars: number,
   timeoutMs: number,
+  allowPrivate: boolean,
 ): Promise<BrowseResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let html: string;
   let contentType = '';
   try {
-    const response = await fetcher(url.toString(), {
-      headers: {
-        accept: 'text/html, text/markdown, text/plain;q=0.9, */*;q=0.1',
-        'user-agent': 'agenticjobs (+https://agenticjobs.work)',
-      },
-      redirect: 'follow',
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new BrowseProblem(`${url.hostname} answered ${response.status}.`);
+    let current = url;
+    let response: Response | undefined;
+    for (let hop = 0; ; hop += 1) {
+      if (hop > MAX_REDIRECTS) throw new BrowseProblem('Too many redirects.');
+      response = await fetcher(current.toString(), {
+        headers: {
+          accept: 'text/html, text/markdown, text/plain;q=0.9, */*;q=0.1',
+          'user-agent': 'agenticjobs (+https://agenticjobs.work)',
+        },
+        redirect: 'manual',
+        signal: controller.signal,
+      });
+      const location = response.headers.get('location');
+      if (!REDIRECT_STATUSES.has(response.status) || location === null) break;
+      // A redirect target is a fresh URL: it needs the same public-address
+      // check as the page the user typed, or a public resume link can bounce
+      // the fetch to a private address the guard was meant to keep out.
+      current = await assertPublicUrl(new URL(location, current).toString(), allowPrivate);
+    }
+    if (response === undefined || !response.ok)
+      throw new BrowseProblem(`${current.hostname} answered ${response?.status ?? 'nothing'}.`);
     contentType = response.headers.get('content-type') ?? '';
     html = (await response.text()).slice(0, 4 * 1024 * 1024);
   } catch (error) {
