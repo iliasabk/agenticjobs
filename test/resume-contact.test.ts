@@ -58,6 +58,33 @@ test('explicit links and non-link facts retain their written values', () => {
   ]);
 });
 
+test('a bold key parses the same wherever the marker closes', () => {
+  // "- **Tel:** +49" closes the bold after the colon and "- **Tel: +49**"
+  // wraps the whole bullet. Both used to leave a `**` inside the value,
+  // where it counted as data: channel detection failed on the corrupted
+  // value, so no href was produced and the field read as a plain fact.
+  const expected = { key: 'Tel', value: '+49 170 5551234', href: 'tel:+491705551234' };
+  for (const bullet of [
+    '- **Tel**: +49 170 5551234',
+    '- **Tel:** +49 170 5551234',
+    '- **Tel:**+49 170 5551234',
+    '- *Tel:* +49 170 5551234',
+    '- **Tel: +49 170 5551234**',
+    '- Tel: +49 170 5551234',
+  ]) {
+    assert.deepEqual(parseResume(`# Ada\n\n${bullet}`).contact[0], expected, bullet);
+  }
+  for (const bullet of [
+    '- **Web:** example.com/ada',
+    '- **Email:** ada@example.com',
+    '- **GitHub:** https://github.com/ada',
+  ]) {
+    const contact = parseResume(`# Ada\n\n${bullet}`).contact[0];
+    assert.ok(contact?.href !== null, `${bullet} should produce a linkable channel`);
+    assert.ok(!contact.value.includes('*'), `${bullet} kept a marker in the value`);
+  }
+});
+
 test('the candidate contact card links to the address supplied in the resume', () => {
   const parsed = parseResume(`# Ada\n\n- Email: ${email}\n- Web: https://example.com/ada_lovelace`);
   const html = String(CandidateDetail({

@@ -59,6 +59,29 @@ test('consecutive lines each get redacted, with no lastIndex carry-over', () => 
   }
 });
 
+test('a channel whose bold closes after the colon is withheld', () => {
+  // The contact pair parser split on the colon inside the bold and left the
+  // closing `**` attached to the value. `hrefFor` then saw "** +49 ...",
+  // produced no href, and the field counted as a plain fact — so a phone
+  // number or profile URL in the most common bold style went out to
+  // signed-out readers verbatim. Only an email survived, and only because
+  // the body scrub happened to catch the address inside it.
+  const source = [
+    '# Ada',
+    '',
+    '- **Tel:** +49 170 5551234',
+    '- **Web:** example.com/ada',
+    '- **Location**: London',
+    '',
+  ].join('\n');
+
+  const { markdown, redacted } = redactContactChannels(source);
+  assert.equal(redacted, true);
+  assert.ok(!markdown.includes('5551234'), 'the phone number is gone');
+  assert.ok(!markdown.includes('example.com/ada'), 'the profile URL is gone');
+  assert.ok(markdown.includes('London'), 'a plain fact stays');
+});
+
 test('a resume with no address is returned untouched', () => {
   const source = '# X\n\n- **Location**: Remote\n\n## Summary\nNothing to hide.\n';
   const { markdown, redacted } = redactContactChannels(source);

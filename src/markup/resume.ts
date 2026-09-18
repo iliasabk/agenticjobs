@@ -290,7 +290,15 @@ function parseContact(raw: string): ResumeContact | null {
     return { key: (link[1] ?? '').trim(), value: (link[1] ?? '').trim(), href: link[2] ?? null };
   }
 
-  const pair = /^\*{0,2}([^:*]{1,40})\*{0,2}\s*:\s*(.+)$/.exec(text);
+  // "- **Tel:** +49" closes the bold after the colon, and "- **Tel: +49**"
+  // wraps the whole bullet. Both are common ways to write the same field, and
+  // either leaves a `**` inside the value — where it is treated as data,
+  // channel detection fails, and the line slips past redaction still carrying
+  // the number or URL it was meant to withhold.
+  const unwrapped = /^(\*{1,2})([^*][\s\S]*?)\1$/.exec(text);
+  const body = unwrapped?.[2] ?? text;
+  const boldPair = /^\*{1,2}([^:*]{1,40}?):\*{1,2}\s*(.+)$/.exec(body);
+  const pair = boldPair ?? /^\*{0,2}([^:*]{1,40})\*{0,2}\s*:\s*(.+)$/.exec(body);
   if (pair === null) {
     return { key: 'note', value: stripMarkdown(text), href: hrefFor(stripMarkdown(text)) };
   }
