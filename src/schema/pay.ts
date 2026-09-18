@@ -631,6 +631,21 @@ function lineFromObject(value: Record<string, unknown>): PayLine | string {
 }
 
 /**
+ * A settlement clause standing on its own - "settled in SOL" as its own line
+ * or "via bank transfer" as its own array entry - names the rail for the
+ * whole pay, not a price. A person splitting a listing into one clause per
+ * line writes it this way, and the `;` the multi-line string is split on is
+ * the same mark the clause itself tolerates in front of it.
+ */
+function standaloneMethod(item: unknown): string | null {
+  if (typeof item !== 'string') return null;
+  const settled = SETTLED.exec(item.trim());
+  if (settled === null || settled.index !== 0) return null;
+  const named = normaliseMethod(settled[1]);
+  return named !== null && (isKnownCurrency(named) || isRail(named)) ? named : null;
+}
+
+/**
  * Pay, from whatever a form, an API client or a model sent.
  *
  * `pay` may be a string (one line, or several separated by newlines), an
@@ -673,6 +688,11 @@ export function normalisePay(input: Record<string, unknown>): Pay | string {
     if (typeof item === 'object' && item !== null) {
       const object = item as Record<string, unknown>;
       if (typeof object['text'] === 'string') {
+        const clause = standaloneMethod(object['text']);
+        if (clause !== null) {
+          namedMethod ??= clause;
+          continue;
+        }
         const read = readPayLine(object['text']);
         if (typeof read === 'string') return read;
         lines.push(read.line);
@@ -682,6 +702,11 @@ export function normalisePay(input: Record<string, unknown>): Pay | string {
       const line = lineFromObject(object);
       if (typeof line === 'string') return line;
       lines.push(line);
+      continue;
+    }
+    const clause = standaloneMethod(item);
+    if (clause !== null) {
+      namedMethod ??= clause;
       continue;
     }
     const read = readPayLine(item);
