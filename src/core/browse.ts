@@ -275,12 +275,30 @@ function inline(fragment: string): string {
 }
 
 function decode(text: string): string {
-  return text
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
+  const named: Record<string, string> = {
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: ' ',
+    amp: '&',
+  };
+  // One pass, amp inside the same alternation: decoding "&amp;lt;" a second
+  // time turns the "&lt;" a page wrote literally into a real "<", which is
+  // how resume text describing markup arrived already mangled.
+  return text.replace(
+    /&(#x[0-9a-fA-F]+|#\d+|lt|gt|quot|apos|nbsp|amp);/g,
+    (whole, entity: string) => {
+      const point = entity.startsWith('#x')
+        ? Number.parseInt(entity.slice(2), 16)
+        : entity.startsWith('#')
+          ? Number(entity.slice(1))
+          : null;
+      if (point !== null) {
+        // Out of range throws in fromCodePoint; the reference stays as typed.
+        return point <= 0x10ffff ? String.fromCodePoint(point) : whole;
+      }
+      return named[entity] ?? whole;
+    },
+  );
 }
