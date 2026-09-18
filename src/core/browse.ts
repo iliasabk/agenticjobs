@@ -283,17 +283,33 @@ function inline(fragment: string): string {
 }
 
 function decode(text: string): string {
-  return text
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => {
-      const point = Number(code);
-      if (point === 0 || point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff))
-        return '\ufffd';
-      return String.fromCodePoint(point);
-    });
+  const named: Record<string, string> = {
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: ' ',
+    amp: '&',
+  };
+  // One pass, amp inside the same alternation: decoding "&amp;lt;" a second
+  // time turns the "&lt;" a page wrote literally into a real "<", which is
+  // how resume text describing markup arrived already mangled.
+  return text.replace(
+    /&(#x[0-9a-fA-F]+|#\d+|lt|gt|quot|apos|nbsp|amp);/g,
+    (whole, entity: string) => {
+      const point = entity.startsWith('#x')
+        ? Number.parseInt(entity.slice(2), 16)
+        : entity.startsWith('#')
+          ? Number(entity.slice(1))
+          : null;
+      if (point !== null) {
+        // Same policy as before: 0, surrogates and out-of-range points
+        // become the replacement character instead of a NUL or a throw.
+        if (point === 0 || point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff))
+          return '\ufffd';
+        return String.fromCodePoint(point);
+      }
+      return named[entity] ?? whole;
+    },
+  );
 }
