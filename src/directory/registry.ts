@@ -89,6 +89,15 @@ export interface ListOptions {
   offset?: number;
 }
 
+/**
+ * A whole number, or the fallback when the caller handed over something that
+ * is not one. `Math.max` cannot do this: it propagates NaN, and a fraction
+ * binds as a LIMIT parameter Postgres refuses rather than as a row count.
+ */
+function asInteger(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isInteger(value) ? value : fallback;
+}
+
 export async function listInstances(
   pool: pg.Pool,
   options: ListOptions = {},
@@ -112,8 +121,8 @@ export async function listInstances(
     );
   }
 
-  params.push(Math.min(500, Math.max(1, options.limit ?? 100)));
-  params.push(Math.max(0, options.offset ?? 0));
+  params.push(Math.min(500, Math.max(1, asInteger(options.limit, 100))));
+  params.push(Math.max(0, asInteger(options.offset, 0)));
 
   const result = await pool.query<InstanceRow>(
     `select id, url, descriptor, first_seen_at, checked_at, failures, blocked
@@ -235,11 +244,7 @@ export async function sweep(
   return result;
 }
 
-export async function blockInstance(
-  pool: pg.Pool,
-  url: string,
-  reason: string,
-): Promise<boolean> {
+export async function blockInstance(pool: pg.Pool, url: string, reason: string): Promise<boolean> {
   const origin = publishable(url);
   if (origin === null) return false;
   const result = await pool.query(
