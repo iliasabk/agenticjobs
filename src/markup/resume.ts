@@ -23,6 +23,8 @@
  * The full specification is in docs/openresume.md.
  */
 
+import { safeUrl } from './escape.ts';
+
 export interface ResumeContact {
   key: string;
   value: string;
@@ -249,7 +251,11 @@ function parseContact(raw: string): ResumeContact | null {
 
   const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(text);
   if (link !== null) {
-    return { key: (link[1] ?? '').trim(), value: (link[1] ?? '').trim(), href: link[2] ?? null };
+    return {
+      key: (link[1] ?? '').trim(),
+      value: (link[1] ?? '').trim(),
+      href: safeUrl(link[2] ?? ''),
+    };
   }
 
   const pair = /^\*{0,2}([^:*]{1,40})\*{0,2}\s*:\s*(.+)$/.exec(text);
@@ -260,7 +266,7 @@ function parseContact(raw: string): ResumeContact | null {
   const rawValue = (pair[2] ?? '').trim();
   const inner = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(rawValue);
   if (inner !== null) {
-    return { key, value: (inner[1] ?? '').trim(), href: inner[2] ?? null };
+    return { key, value: (inner[1] ?? '').trim(), href: safeUrl(inner[2] ?? '') };
   }
   const value = stripMarkdown(rawValue);
   return { key, value, href: hrefFor(value) };
