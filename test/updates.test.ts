@@ -13,7 +13,13 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { candidateName, normaliseLink, BODY_MAX, BODY_MIN } from '../dist/core/updates.js';
+import {
+  candidateName,
+  deleteUpdate,
+  normaliseLink,
+  BODY_MAX,
+  BODY_MIN,
+} from '../dist/core/updates.js';
 import { UpdateItem, UpdateList, FollowButton } from '../dist/views/updates.js';
 
 /** Hono's JSX nodes stringify, which is how the other view tests read them. */
@@ -141,4 +147,24 @@ test('a followed candidate is named from their resume, never "Someone"', () => {
   // whole document. That is not a name, and the next fallback is used.
   assert.equal(candidateName('x'.repeat(200), 'Ada', 'Resume'), 'Ada');
   assert.ok(!candidateName(null, null, null).includes('Someone'));
+});
+
+test('deleting an update with a malformed id is a miss, not a database error', async () => {
+  // DELETE /api/v1/updates/:id hands the path segment to the query. A string
+  // that is not a uuid makes Postgres raise rather than match nothing - a
+  // 500 where every other id-taking route answers 404.
+  let reached = false;
+  const pool = {
+    query: async () => {
+      reached = true;
+      return { rows: [], rowCount: 0 };
+    },
+  };
+  const gone = await deleteUpdate(
+    pool as never,
+    '00000000-0000-4000-8000-000000000000',
+    'definitely-not-a-uuid',
+  );
+  assert.equal(gone, false);
+  assert.equal(reached, false, 'a malformed id never reaches the database');
 });

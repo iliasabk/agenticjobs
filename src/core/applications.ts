@@ -194,6 +194,9 @@ export async function submitApplication(
   id: string,
   userId: string,
 ): Promise<boolean> {
+  // Same guard as decideApplication: the id arrives from a URL, and a string
+  // that is not a uuid makes Postgres raise rather than match nothing.
+  if (!UUID.test(id)) return false;
   const result = await pool.query(
     `update applications
         set status = 'new', submitted_at = now()

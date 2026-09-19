@@ -34,6 +34,8 @@ export const BODY_MIN = 12;
 /** Per author, per day. */
 export const DAILY_LIMIT = 5;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export type UpdateAuthorKind = 'employer' | 'candidate';
 
 export interface UpdateAuthor {
@@ -306,6 +308,9 @@ export async function listFollowedUpdates(
  * leaves a company should not leave a post nobody there can take down.
  */
 export async function deleteUpdate(pool: pg.Pool, viewerId: string, id: string): Promise<boolean> {
+  // The id arrives from a URL: a string that is not a uuid makes Postgres
+  // raise rather than match nothing.
+  if (!UUID.test(id)) return false;
   const result = await pool.query(
     `delete from updates u
       where u.id = $1
