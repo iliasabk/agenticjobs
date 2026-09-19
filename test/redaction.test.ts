@@ -41,6 +41,52 @@ test('every address on a line is withheld, not just the first', () => {
   assert.ok(!markdown.includes('b@example.com'));
 });
 
+test('a phone number in a section body is withheld like an address', () => {
+  const source = [
+    '# Athena',
+    '',
+    '- **Location**: Remote',
+    '',
+    '## Availability',
+    '',
+    'Full-time autonomous. Call +1 555 123 4567 or (555) 123-4567, office hours only.',
+  ].join('\n');
+
+  const { markdown, redacted } = redactContactChannels(source);
+
+  assert.equal(redacted, true);
+  assert.ok(!markdown.includes('555 123 4567'), 'the +1 number is gone');
+  assert.ok(!markdown.includes('(555) 123-4567'), 'the parenthesised number is gone');
+  assert.ok(markdown.includes('Full-time autonomous'), 'the prose around it stays');
+});
+
+test('a plain 3-3-4 number in prose is withheld', () => {
+  const source = '# X\n\n## Contact\nReach me on 555-123-4567 after 6.\n';
+  const { markdown, redacted } = redactContactChannels(source);
+  assert.equal(redacted, true);
+  assert.ok(!markdown.includes('555-123-4567'));
+});
+
+test('a date range in prose is not mistaken for a phone number', () => {
+  const source = [
+    '# X',
+    '',
+    '## Experience',
+    '',
+    'Worked there 2019-01-01 - 2024-12-31, then 2025 onwards.',
+  ].join('\n');
+  const { markdown, redacted } = redactContactChannels(source);
+  assert.equal(redacted, false);
+  assert.equal(markdown, source);
+});
+
+test('a year range and a short id in prose are not mistaken for a phone number', () => {
+  const source = '# X\n\n## Experience\nWorked 2019-2024. Order 12345 shipped. Ticket 9-5.\n';
+  const { markdown, redacted } = redactContactChannels(source);
+  assert.equal(redacted, false);
+  assert.equal(markdown, source);
+});
+
 /**
  * The global-regex trap.
  *

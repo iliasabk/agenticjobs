@@ -372,6 +372,17 @@ export const CONTACT_WITHHELD = 'shared with signed-in members';
 const EMAIL_IN_TEXT = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
 /**
+ * A diallable number written into prose. The contact block withholds `tel:`
+ * fields already; a number in a sentence is the same channel and gets the
+ * same scrub. Three shapes: an international `+` number, a parenthesised
+ * area code, and the plain 3-3-4 split. Anything looser - "2019-2024",
+ * "06 12 34 56 78" - is left alone rather than guessed at, because a wrong
+ * redaction corrupts a document its owner cannot see break.
+ */
+const PHONE_IN_TEXT =
+  /(?:\+\d[\d ()./-]{6,}\d|\(\d{3}\)[\d ()./-]{5,}\d|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b)/g;
+
+/**
  * The contact block, minus every way to actually reach the person.
  *
  * A published resume is a document its owner chose to make public, but the
@@ -459,7 +470,9 @@ export function redactContactChannels(source: string): { markdown: string; redac
     // global, and a global regex's `test` advances `lastIndex` between calls,
     // so it returns false on matches it has already walked past. That is how a
     // redaction skips lines at random and still passes a one-line unit test.
-    const scrubbed = line.replace(EMAIL_IN_TEXT, CONTACT_WITHHELD);
+    const scrubbed = line
+      .replace(EMAIL_IN_TEXT, CONTACT_WITHHELD)
+      .replace(PHONE_IN_TEXT, CONTACT_WITHHELD);
     if (scrubbed !== line) {
       out.push(scrubbed);
       redacted = true;
