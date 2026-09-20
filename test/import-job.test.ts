@@ -112,6 +112,85 @@ test('a JobPosting inside an @graph is still found', () => {
   assert.equal(job.title, 'Cook');
 });
 
+test('an incomplete JobPosting in an earlier block does not hide a complete later one', () => {
+  const html = `<html><head>
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"JobPosting","title":"Breadcrumb"}
+    </script>
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"JobPosting",
+       "title":"Real role","description":"<p>Do the work.</p>",
+       "employmentType":"PART_TIME","jobLocationType":"TELECOMMUTE"}
+    </script>
+    </head><body><main><p>page text</p></main></body></html>`;
+  const job = extractJob(html, 'https://example.com/jobs/two-blocks');
+  assert.equal(job.via, 'jsonld');
+  assert.equal(job.title, 'Real role');
+  assert.equal(job.description, 'Do the work.');
+  assert.equal(job.employmentType, 'part-time');
+  assert.equal(job.workplace, 'remote');
+});
+
+test('an incomplete JobPosting earlier in an @graph does not hide a complete later one', () => {
+  const html = `<script type="application/ld+json">
+    {"@context":"https://schema.org","@graph":[
+      {"@type":"JobPosting","description":"<p>No title here.</p>"},
+      {"@type":"JobPosting","title":"Graphed role","description":"<p>From the graph.</p>"}]}
+  </script>
+  <body><main><p>page text</p></main></body>`;
+  const job = extractJob(html, 'https://example.com/jobs/graph');
+  assert.equal(job.via, 'jsonld');
+  assert.equal(job.title, 'Graphed role');
+  assert.equal(job.description, 'From the graph.');
+});
+
+test('a JobPosting whose description carries no readable text is skipped', () => {
+  const html = `<html><head>
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"JobPosting",
+       "title":"Markup only","description":"<script>var x=1;</script><style>.a{}</style>"}
+    </script>
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"JobPosting",
+       "title":"Usable role","description":"<p>Readable body.</p>"}
+    </script>
+    </head><body><main><p>page text</p></main></body></html>`;
+  const job = extractJob(html, 'https://example.com/jobs/markup-only');
+  assert.equal(job.via, 'jsonld');
+  assert.equal(job.title, 'Usable role');
+  assert.equal(job.description, 'Readable body.');
+});
+
+test('the first complete JobPosting wins over a complete later one', () => {
+  const html = `<script type="application/ld+json">
+    [{"@context":"https://schema.org","@type":"JobPosting",
+      "title":"Early role","description":"<p>First.</p>"},
+     {"@context":"https://schema.org","@type":"JobPosting",
+      "title":"Later role","description":"<p>Second.</p>"}]
+  </script>`;
+  const job = extractJob(html, 'https://example.com/jobs/precedence');
+  assert.equal(job.via, 'jsonld');
+  assert.equal(job.title, 'Early role');
+  assert.equal(job.description, 'First.');
+});
+
+test('when every JobPosting is incomplete the page is read instead, and says so', () => {
+  const html = `<html><head>
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"JobPosting","title":"Title only"}
+    </script>
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"JobPosting","description":"<p>Body only.</p>"}
+    </script>
+    </head><body><main><h1>Fallback role</h1><p>Readable fallback body.</p></main></body></html>`;
+  const job = extractJob(html, 'https://example.com/jobs/all-incomplete');
+  assert.equal(job.via, 'page');
+  assert.equal(job.title, 'Fallback role');
+  assert.match(job.description, /Readable fallback body\./);
+  assert.ok(job.warnings.some((w) => /missing a title or a description/i.test(w)));
+  assert.ok(job.warnings.some((w) => /no JobPosting data/i.test(w)));
+});
+
 test('a page with no JobPosting is read off the page, and says so', () => {
   const html = `<!doctype html><html><head>
     <meta property="og:title" content="Register your agent | ugig.net">

@@ -210,29 +210,35 @@ function trimSiteName(title: string): string {
 export function extractJob(html: string, sourceUrl: string): ImportedJob {
   const warnings: string[] = [];
 
-  const posting = jsonLdNodes(html).find((node) => typeOf(node).includes('JobPosting'));
-  if (posting !== undefined) {
+  // A page can carry more than one JobPosting (several blocks, an array, a
+  // CMS @graph). An incomplete one does not make the ones after it unusable,
+  // so the first posting that has both a title and a readable description is
+  // the one imported; only when every posting is incomplete does the import
+  // fall back to reading the page itself.
+  const postings = jsonLdNodes(html).filter((node) => typeOf(node).includes('JobPosting'));
+  for (const posting of postings) {
     const title = typeof posting['title'] === 'string' ? posting['title'].trim() : '';
     const rawDescription =
       typeof posting['description'] === 'string' ? posting['description'] : '';
     const description = tidy(stripTags(rawDescription));
-    if (title !== '' && description !== '') {
-      const employmentType = employmentTypeOf(posting['employmentType']);
-      const workplace = workplaceOf(posting);
-      const location = locationOf(posting);
-      if (employmentType === undefined) warnings.push('No employment type in the posting.');
-      if (workplace === undefined) warnings.push('No workplace, so it was left unset.');
-      return {
-        title,
-        description,
-        sourceUrl,
-        via: 'jsonld',
-        warnings,
-        ...(employmentType === undefined ? {} : { employmentType }),
-        ...(workplace === undefined ? {} : { workplace }),
-        ...(location === undefined ? {} : { location }),
-      };
-    }
+    if (title === '' || description === '') continue;
+    const employmentType = employmentTypeOf(posting['employmentType']);
+    const workplace = workplaceOf(posting);
+    const location = locationOf(posting);
+    if (employmentType === undefined) warnings.push('No employment type in the posting.');
+    if (workplace === undefined) warnings.push('No workplace, so it was left unset.');
+    return {
+      title,
+      description,
+      sourceUrl,
+      via: 'jsonld',
+      warnings,
+      ...(employmentType === undefined ? {} : { employmentType }),
+      ...(workplace === undefined ? {} : { workplace }),
+      ...(location === undefined ? {} : { location }),
+    };
+  }
+  if (postings.length > 0) {
     warnings.push('The page had a JobPosting but it was missing a title or a description.');
   }
 
