@@ -290,6 +290,7 @@ function decodeXml(value: string): string {
   const named: Record<string, string> = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' };
   // One pass keeps a decoded ampersand from starting another reference.
   return value.replace(/&(#x[0-9a-fA-F]+|#\d+|lt|gt|quot|apos|amp);/g, (whole, entity: string) => {
+    if (!entity.startsWith('#')) return named[entity] ?? whole;
     // HTML replaces null, surrogates and values outside Unicode with U+FFFD.
     // In particular, a document must not make fromCodePoint throw and kill
     // an otherwise readable import.
